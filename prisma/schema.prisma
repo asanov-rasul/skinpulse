@@ -1,0 +1,104 @@
+// SkinPulse — Prisma schema
+// PostgreSQL. Run `npx prisma migrate dev --name init` after setting DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Rarity {
+  CONSUMER
+  INDUSTRIAL
+  MIL_SPEC
+  RESTRICTED
+  CLASSIFIED
+  COVERT
+  CONTRABAND
+  GOLD // knives / gloves
+}
+
+model Item {
+  id              String   @id @default(cuid())
+  marketHashName  String   @unique
+  name            String
+  weaponType      String
+  skinName        String?
+  rarity          Rarity
+  exterior        String? // Factory New, Minimal Wear, etc.
+  imageUrl        String
+  appId           Int      @default(730) // CS2 = 730
+
+  priceHistory    PriceSnapshot[]
+  watchlistedBy   WatchlistEntry[]
+  alerts          PriceAlert[]
+
+  // Denormalized fields for fast dashboard queries (updated by cron)
+  lastPrice       Float?
+  lastVolume      Int?
+  change24h       Float? // percentage
+  change7d        Float?
+  lastFetchedAt   DateTime?
+  fetchStale      Boolean  @default(false) // true if last fetch failed and we're serving cached data
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([rarity])
+  @@index([weaponType])
+  @@index([change24h])
+}
+
+model PriceSnapshot {
+  id        String   @id @default(cuid())
+  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId    String
+  price     Float
+  volume    Int?
+  timestamp DateTime @default(now())
+
+  @@index([itemId, timestamp])
+}
+
+model WatchlistEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId      String
+  targetPrice Float?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, itemId])
+  @@index([userId, sortOrder])
+}
+
+model PriceAlert {
+  id          String    @id @default(cuid())
+  userId      String
+  item        Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId      String
+  direction   String    // "above" | "below"
+  targetPrice Float
+  triggered   Boolean   @default(false)
+  triggeredAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([itemId, triggered])
+}
+
+// Tracks API fetch queue state — used by the rate-limited Steam poller
+model FetchLog {
+  id         String   @id @default(cuid())
+  marketHashName String
+  success    Boolean
+  statusCode Int?
+  message    String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+}
