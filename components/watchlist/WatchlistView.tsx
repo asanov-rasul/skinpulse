@@ -6,43 +6,72 @@ import { Star } from "lucide-react";
 import { useWatchlistStore, type WatchlistItem } from "@/lib/store/useWatchlistStore";
 import { useToastStore } from "@/lib/store/useToastStore";
 import { WatchlistRow } from "./WatchlistRow";
-import { MOCK_ITEMS } from "@/lib/mock/items";
 
-// Seed a few watchlist entries on first load so the page isn't empty for a
-// fresh demo session. In production this initial load comes from
-// GET /api/watchlist instead.
-const SEED: WatchlistItem[] = MOCK_ITEMS.slice(0, 3).map((item, i) => ({
-  id: `seed-${item.id}`,
-  itemId: item.id,
-  marketHashName: item.marketHashName,
-  name: item.name,
-  imageUrl: item.imageUrl,
-  rarity: item.rarity,
-  lastPrice: item.lastPrice,
-  change24h: item.change24h,
-  targetPrice: null,
-  sortOrder: i,
-}));
+type ApiWatchlistEntry = {
+  id: string;
+  itemId: string;
+  targetPrice: number | null;
+  sortOrder: number;
+  item: {
+    marketHashName: string;
+    name: string;
+    imageUrl: string;
+    rarity: string;
+    lastPrice: number | null;
+    change24h: number | null;
+  };
+};
+
+function toWatchlistItem(entry: ApiWatchlistEntry): WatchlistItem {
+  return {
+    id: entry.id,
+    itemId: entry.itemId,
+    marketHashName: entry.item.marketHashName,
+    name: entry.item.name,
+    imageUrl: entry.item.imageUrl,
+    rarity: entry.item.rarity,
+    lastPrice: entry.item.lastPrice,
+    change24h: entry.item.change24h,
+    targetPrice: entry.targetPrice,
+    sortOrder: entry.sortOrder,
+  };
+}
 
 export function WatchlistView() {
-  const { items, loaded, setItems, reorder, removeOptimistic } = useWatchlistStore();
+  const { items, loaded, setItems, reorder, removeOptimistic, rollbackRemove } = useWatchlistStore();
   const pushToast = useToastStore((s) => s.push);
 
   useEffect(() => {
-    if (!loaded) setItems(SEED);
+    if (loaded) return;
+    fetch("/api/watchlist")
+      .then((res) => res.json())
+      .then((data: { entries: ApiWatchlistEntry[] }) => {
+        setItems((data.entries ?? []).map(toWatchlistItem));
+      })
+      .catch(() => setItems([]));
   }, [loaded, setItems]);
 
   function handleRemove(itemId: string) {
     const removed = removeOptimistic(itemId);
     if (!removed) return;
 
-    // Optimistic remove: in production this fires DELETE /api/watchlist/:id
-    // and calls rollbackRemove(removed) if the server call fails.
-    pushToast({
-      title: "Removed from watchlist",
-      description: removed.name,
-      variant: "default",
-    });
+    fetch(`/api/watchlist/${itemId}`, { method: "DELETE" })
+      .then((res) => {
+        if (!res.ok) throw new Error("failed");
+        pushToast({
+          title: "Removed from watchlist",
+          description: removed.name,
+          variant: "default",
+        });
+      })
+      .catch(() => {
+        rollbackRemove(removed);
+        pushToast({
+          title: "Couldn't remove item",
+          description: "Please try again.",
+          variant: "default",
+        });
+      });
   }
 
   if (!loaded) return null;

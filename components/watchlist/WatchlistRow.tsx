@@ -9,8 +9,6 @@ import { PriceChange } from "@/components/ui/PriceChange";
 import { RarityBadge } from "@/components/ui/RarityBadge";
 import type { WatchlistItem } from "@/lib/store/useWatchlistStore";
 import type { Rarity } from "@/lib/utils/rarity";
-import { getMockItemById } from "@/lib/mock/items";
-import { Sparkline } from "@/components/ui/Sparkline";
 
 export function WatchlistRow({
   entry,
@@ -20,7 +18,6 @@ export function WatchlistRow({
   onRemove: (itemId: string) => void;
 }) {
   const controls = useDragControls();
-  const mockItem = getMockItemById(entry.itemId);
 
   return (
     <Reorder.Item
@@ -60,20 +57,11 @@ export function WatchlistRow({
         <RarityBadge rarity={entry.rarity as Rarity} />
       </Link>
 
-      {mockItem && (
-        <div className="hidden w-20 sm:block">
-          <Sparkline
-            data={mockItem.sparkline}
-            color={mockItem.change24h >= 0 ? "#3fd67a" : "#ef4a5f"}
-            height={28}
-          />
-        </div>
-      )}
-
       <div className="text-right">
         <p className="tabular text-sm font-semibold text-white">{formatPrice(entry.lastPrice)}</p>
         <PriceChange value={entry.change24h} />
       </div>
+
 
       <button
         onClick={() => onRemove(entry.itemId)}
