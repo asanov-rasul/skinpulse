@@ -12,7 +12,6 @@ import {
 } from "recharts";
 import { motion } from "framer-motion";
 import { formatPrice } from "@/lib/utils/format";
-import { generatePriceHistory } from "@/lib/mock/items";
 import { cn } from "@/lib/utils/cn";
 
 const RANGES = [
@@ -23,22 +22,30 @@ const RANGES = [
 ] as const;
 
 type RangeLabel = (typeof RANGES)[number]["label"];
+type HistoryPoint = { date: string; price: number };
 
 export function PriceChart({
+  history,
   basePrice,
-  volatility,
   color = "#3fd67a",
 }: {
+  history: HistoryPoint[];
   basePrice: number;
-  volatility: number;
   color?: string;
 }) {
   const [range, setRange] = useState<RangeLabel>("30D");
 
   const data = useMemo(() => {
     const days = RANGES.find((r) => r.label === range)!.days;
-    return generatePriceHistory(basePrice, days, volatility);
-  }, [range, basePrice, volatility]);
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    const filtered = history.filter((p) => new Date(p.date).getTime() >= cutoff);
+    // Real snapshots only run once a day (see vercel.json cron), so early on
+    // there may be just 1-2 points. Render what we actually have rather than
+    // padding with fabricated data — the empty-state below covers 0 points.
+    return filtered;
+  }, [range, history]);
+
+  const hasData = data.length > 0;
 
   return (
     <div className="glass rounded-2xl p-4 sm:p-6">
@@ -70,49 +77,53 @@ export function PriceChart({
         </div>
       </div>
 
-      {/* key={range} forces Recharts to smoothly re-render its path via CSS
-          transitions on the data rather than an abrupt redraw */}
-      <div className="h-64 sm:h-80">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-            <defs>
-              <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-                <stop offset="100%" stopColor={color} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickFormatter={(d) => new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-              stroke="rgba(255,255,255,0.3)"
-              tick={{ fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-              minTickGap={40}
-            />
-            <YAxis
-              domain={["auto", "auto"]}
-              stroke="rgba(255,255,255,0.3)"
-              tick={{ fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(v) => `$${v}`}
-              width={48}
-            />
-            <Tooltip content={<ChartTooltip />} cursor={{ stroke: color, strokeWidth: 1, strokeDasharray: "3 3" }} />
-            <Area
-              type="monotone"
-              dataKey="price"
-              stroke={color}
-              strokeWidth={2}
-              fill="url(#priceGradient)"
-              animationDuration={500}
-              animationEasing="ease-out"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      {!hasData ? (
+        <div className="flex h-64 items-center justify-center text-sm text-white/40 sm:h-80">
+          Not enough price history yet for this range — check back after the next snapshot.
+        </div>
+      ) : (
+        <div className="h-64 sm:h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+                  <stop offset="100%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickFormatter={(d) => new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                stroke="rgba(255,255,255,0.3)"
+                tick={{ fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                minTickGap={40}
+              />
+              <YAxis
+                domain={["auto", "auto"]}
+                stroke="rgba(255,255,255,0.3)"
+                tick={{ fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) => `$${v}`}
+                width={48}
+              />
+              <Tooltip content={<ChartTooltip />} cursor={{ stroke: color, strokeWidth: 1, strokeDasharray: "3 3" }} />
+              <Area
+                type="monotone"
+                dataKey="price"
+                stroke={color}
+                strokeWidth={2}
+                fill="url(#priceGradient)"
+                animationDuration={500}
+                animationEasing="ease-out"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }

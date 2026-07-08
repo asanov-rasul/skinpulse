@@ -20,9 +20,11 @@ import type { MockItem } from "@/lib/mock/items";
 export function ItemDetailView({
   item,
   similar,
+  history,
 }: {
   item: MockItem;
   similar: MockItem[];
+  history: { date: string; price: number }[];
 }) {
   const [alertOpen, setAlertOpen] = useState(false);
   const isWatched = useWatchlistStore((s) => s.isWatched(item.id));
@@ -112,8 +114,8 @@ export function ItemDetailView({
 
       <div className="mt-6">
         <PriceChart
+          history={history}
           basePrice={item.lastPrice}
-          volatility={Math.max(2, Math.abs(item.change7d))}
           color={RARITY_COLOR[item.rarity]}
         />
       </div>
