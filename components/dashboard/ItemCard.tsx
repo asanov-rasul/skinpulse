@@ -23,8 +23,25 @@ export function ItemCard({ item }: { item: MockItem }) {
   function toggleWatch(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
+
     if (isWatched) {
-      removeOptimistic(item.id);
+      const removed = removeOptimistic(item.id);
+      fetch(`/api/watchlist/${item.id}`, { method: "DELETE" }).catch(() => {
+        if (removed) {
+          addOptimistic({
+            id: removed.id,
+            itemId: item.id,
+            marketHashName: item.marketHashName,
+            name: item.name,
+            imageUrl: item.imageUrl,
+            rarity: item.rarity,
+            lastPrice: item.lastPrice,
+            change24h: item.change24h,
+            targetPrice: null,
+            sortOrder: 0,
+          });
+        }
+      });
     } else {
       addOptimistic({
         id: `local-${item.id}`,
@@ -38,9 +55,13 @@ export function ItemCard({ item }: { item: MockItem }) {
         targetPrice: null,
         sortOrder: 0,
       });
+
+      fetch("/api/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: item.id }),
+      }).catch(() => removeOptimistic(item.id));
     }
-    // In production this optimistic update would be paired with a fetch()
-    // to /api/watchlist, rolling back via rollbackAdd/rollbackRemove on failure.
   }
 
   return (
