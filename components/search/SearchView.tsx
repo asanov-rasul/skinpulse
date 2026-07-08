@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Search as SearchIcon } from "lucide-react";
-import { MOCK_ITEMS } from "@/lib/mock/items";
+import type { MockItem } from "@/lib/mock/items";
 import { useFilterStore } from "@/lib/store/useFilterStore";
 import { useDebouncedValue } from "@/lib/hooks/useDebouncedValue";
 import { FilterPanel } from "@/components/search/FilterPanel";
@@ -10,28 +10,67 @@ import { StaggerGrid, StaggerItem } from "@/components/motion/StaggerGrid";
 import { ItemCard } from "@/components/dashboard/ItemCard";
 import { ItemCardSkeletonGrid } from "@/components/ui/Skeleton";
 
+type ApiItem = {
+  id: string;
+  name: string;
+  marketHashName: string;
+  weaponType: string;
+  rarity: MockItem["rarity"];
+  imageUrl: string;
+  lastPrice: number | null;
+  lastVolume: number | null;
+  change24h: number | null;
+  change7d: number | null;
+};
+
+function toMockItemShape(item: ApiItem): MockItem {
+  return {
+    id: item.id,
+    marketHashName: item.marketHashName,
+    name: item.name,
+    weaponType: item.weaponType,
+    rarity: item.rarity,
+    imageUrl: item.imageUrl,
+    lastPrice: item.lastPrice ?? 0,
+    change24h: item.change24h ?? 0,
+    change7d: item.change7d ?? 0,
+    volume: item.lastVolume ?? 0,
+    sparkline: [],
+  };
+}
+
 export function SearchView() {
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 200);
   const { rarities, weaponTypes } = useFilterStore();
 
-  // Simulated loading state so the skeleton path is actually reachable —
-  // in production this flips based on the real fetch/query lifecycle.
-  const [isPending, setIsPending] = useState(false);
+  const [results, setResults] = useState<MockItem[]>([]);
+  const [isPending, setIsPending] = useState(true);
 
   function handleChange(value: string) {
     setQuery(value);
-    setIsPending(true);
-    setTimeout(() => setIsPending(false), 220);
   }
 
-  const results = useMemo(() => {
-    return MOCK_ITEMS.filter((item) => {
-      const matchesQuery = item.name.toLowerCase().includes(debouncedQuery.toLowerCase());
-      const matchesRarity = rarities.length === 0 || rarities.includes(item.rarity);
-      const matchesWeapon = weaponTypes.length === 0 || weaponTypes.includes(item.weaponType);
-      return matchesQuery && matchesRarity && matchesWeapon;
-    });
+  useEffect(() => {
+    const controller = new AbortController();
+    setIsPending(true);
+
+    const params = new URLSearchParams();
+    if (debouncedQuery) params.set("query", debouncedQuery);
+    if (rarities.length) params.set("rarity", rarities.join(","));
+    if (weaponTypes.length) params.set("weapon", weaponTypes.join(","));
+
+    fetch(`/api/items?${params.toString()}`, { signal: controller.signal })
+      .then((res) => res.json())
+      .then((data: { items: ApiItem[] }) => {
+        setResults((data.items ?? []).map(toMockItemShape));
+        setIsPending(false);
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") setIsPending(false);
+      });
+
+    return () => controller.abort();
   }, [debouncedQuery, rarities, weaponTypes]);
 
   return (
