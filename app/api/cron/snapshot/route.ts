@@ -3,6 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { fetchPriceOverview } from "@/lib/steam/client";
 import { RateLimitError } from "@/lib/steam/queue";
 
+// Force this route to be treated as fully dynamic (never statically
+// analyzed/executed at build time). Without this, Next.js's build-time
+// "collecting page data" step imports this module, which in turn
+// instantiates PrismaClient — and that import fails on Vercel's clean
+// build machine if the Prisma Client hasn't been generated yet, causing
+// the whole build to fail on this route specifically.
+export const dynamic = "force-dynamic";
+
 /**
  * GET /api/cron/snapshot
  *
