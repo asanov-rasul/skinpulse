@@ -17,8 +17,6 @@ import { cn } from "@/lib/utils/cn";
 const RANGES = [
   { label: "7D", days: 7 },
   { label: "30D", days: 30 },
-  { label: "90D", days: 90 },
-  { label: "1Y", days: 365 },
 ] as const;
 
 type RangeLabel = (typeof RANGES)[number]["label"];
