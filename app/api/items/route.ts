@@ -44,9 +44,45 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ items });
+    const itemIds = items.map((i) => i.id);
+    const sparklines = await fetchSparklines(itemIds);
+
+    const itemsWithSparkline = items.map((item) => ({
+      ...item,
+      sparkline: sparklines.get(item.id) ?? [],
+    }));
+
+    return NextResponse.json({ items: itemsWithSparkline });
   } catch (err) {
     console.error("[/api/items] query failed:", err);
     return NextResponse.json({ error: "Failed to load items" }, { status: 500 });
   }
+}
+
+// Fetches the last N price points per item in a single query, oldest first
+// (the order Sparkline expects to draw left→right).
+async function fetchSparklines(itemIds: string[], pointsPerItem = 7): Promise<Map<string, number[]>> {
+  if (itemIds.length === 0) return new Map();
+
+  const snapshots = await prisma.priceSnapshot.findMany({
+    where: { itemId: { in: itemIds } },
+    orderBy: { timestamp: "desc" },
+    select: { itemId: true, price: true },
+  });
+
+  const byItem = new Map<string, number[]>();
+  for (const id of itemIds) byItem.set(id, []);
+
+  const counts = new Map<string, number>();
+  for (const snap of snapshots) {
+    const count = counts.get(snap.itemId) ?? 0;
+    if (count >= pointsPerItem) continue;
+    byItem.get(snap.itemId)?.push(snap.price);
+    counts.set(snap.itemId, count + 1);
+  }
+  for (const [id, prices] of byItem) {
+    byItem.set(id, prices.reverse());
+  }
+
+  return byItem;
 }
