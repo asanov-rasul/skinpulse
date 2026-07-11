@@ -35,27 +35,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const watchlistedItemIds = await prisma.watchlistEntry.findMany({
-    select: { itemId: true },
-    distinct: ["itemId"],
-  });
-
-  const topItems = await prisma.item.findMany({
-    orderBy: { lastVolume: "desc" },
-    take: 100,
-    select: { id: true },
-  });
-
-  const targetIds = Array.from(
-    new Set([
-      ...watchlistedItemIds.map((w: { itemId: string }) => w.itemId),
-      ...topItems.map((t: { id: string }) => t.id),
-    ])
-  );
-
-  const items = await prisma.item.findMany({
-    where: { id: { in: targetIds } },
-  });
+  // Snapshot every item in the database. This used to be limited to the
+  // top-100-by-volume + watchlisted items, but that left long-tail items
+  // with no history at all (empty chart, "not enough price history yet").
+  // With one run per day this is fine for a catalog in the thousands; if
+  // the catalog grows enough that a full pass no longer fits inside the
+  // cron interval, reintroduce a priority subset (watchlist + top-N) and
+  // round-robin the rest across multiple runs.
+  const items = await prisma.item.findMany();
 
   let succeeded = 0;
   let failed = 0;
@@ -72,7 +59,12 @@ export async function GET(req: NextRequest) {
       }
 
       await prisma.priceSnapshot.create({
-        data: { itemId: item.id, price: result.price, volume: result.volume ?? undefined },
+        data: {
+          itemId: item.id,
+          price: result.price,
+          volume: result.volume ?? undefined,
+          isSynthetic: false,
+        },
       });
 
       const change24h = await computeChange(item.id, result.price, 24);
