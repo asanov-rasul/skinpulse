@@ -21,6 +21,7 @@ type ApiItem = {
   lastVolume: number | null;
   change24h: number | null;
   change7d: number | null;
+  sparkline?: number[];
 };
 
 function toMockItemShape(item: ApiItem): MockItem {
@@ -35,7 +36,7 @@ function toMockItemShape(item: ApiItem): MockItem {
     change24h: item.change24h ?? 0,
     change7d: item.change7d ?? 0,
     volume: item.lastVolume ?? 0,
-    sparkline: [],
+    sparkline: item.sparkline ?? [],
   };
 }
 
