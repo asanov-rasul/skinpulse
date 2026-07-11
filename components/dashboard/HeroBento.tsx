@@ -61,9 +61,9 @@ async function fetchSparklines(itemIds: string[], pointsPerItem = 7): Promise<Ma
     byItem.get(snap.itemId)?.push(snap.price);
     counts.set(snap.itemId, count + 1);
   }
-  for (const [id, prices] of byItem) {
+  byItem.forEach((prices, id) => {
     byItem.set(id, prices.reverse());
-  }
+  });
 
   return byItem;
 }
